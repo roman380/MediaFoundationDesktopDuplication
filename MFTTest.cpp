@@ -21,11 +21,11 @@
 #include <Codecapi.h>
 // Custom
 #include "DDAImpl.h"
+#include "Defs.h"
 
 // Constants
 constexpr UINT ENCODE_WIDTH = 1920;
 constexpr UINT ENCODE_HEIGHT = 1080;
-constexpr UINT ENCODE_FRAMES = 120;
 
 CComPtr<IMFVideoSampleAllocatorEx> allocator;
 
@@ -115,7 +115,7 @@ HRESULT GetEncoder(IN const CComPtr<ID3D11Device>& device, OUT CComPtr<IMFTransf
 	return hr;
 }
 
-HRESULT ConfigureEncoder(IN CComPtr<IMFTransform>& transform, CComPtr<IMFDXGIDeviceManager>& deviceManager, DWORD inputStreamID, 
+HRESULT ConfigureEncoder(IN CComPtr<IMFTransform>& transform, CComPtr<IMFDXGIDeviceManager>& deviceManager, DWORD inputStreamID,
 	DWORD outputStreamID
 )
 {
@@ -194,7 +194,7 @@ int main()
 	// Get encoder
 	CComPtr<IMFTransform> transform;
 	CComPtr<IMFActivate> activate;
-	if(FAILED(hr = GetEncoder(device, transform, activate)))
+	if (FAILED(hr = GetEncoder(device, transform, activate)))
 		return hr;
 
 	// Get the name of the encoder
@@ -202,8 +202,8 @@ int main()
 	UINT32 friendlyNameLength;
 	if (FAILED(hr = activate->GetAllocatedString(MFT_FRIENDLY_NAME_Attribute, &friendlyName, &friendlyNameLength)))
 		return hr;
-	std::wcout << "- Selected encoder: " <<  static_cast<WCHAR const*>(friendlyName) << std::endl;
-	
+	std::wcout << "- Selected encoder: " << static_cast<WCHAR const*>(friendlyName) << std::endl;
+
 	// Unlock the transform for async use and get event generator
 	if (FAILED(hr = transformAttrs->SetUINT32(MF_TRANSFORM_ASYNC_UNLOCK, true)))
 		return hr;
@@ -223,112 +223,98 @@ int main()
 	if (FAILED(hr = ConfigureEncoder(transform, deviceManager, inputStreamID, outputStreamID)))
 		return hr;
 
+	// Create DDAImpl Class
+	DDAImpl d(device, context);
+	if (FAILED(hr = d.Init()))
+		return hr;
+
+	// Capture loop
+	const int nFrames = 60;
+	const int WAIT_BASE = 17;
+	int capturedFrames = 0;
+	LARGE_INTEGER start = { 0 };
+	LARGE_INTEGER end = { 0 };
+	LARGE_INTEGER interval = { 0 };
+	LARGE_INTEGER freq = { 0 };
+	int wait = WAIT_BASE;
+
+	// Failure count from Capture API
+	UINT failCount = 0;
+
+	ID3D11Texture2D* pDupTex2D;
+
+	QueryPerformanceFrequency(&freq);
+
+	// Reset waiting time for the next screen capture attempt
+#define RESET_WAIT_TIME(start, end, interval, freq)         \
+    QueryPerformanceCounter(&end);                          \
+    interval.QuadPart = end.QuadPart - start.QuadPart;      \
+    MICROSEC_TIME(interval, freq);                          \
+    wait = (int)(WAIT_BASE - (interval.QuadPart * 1000));
+
+	// Run capture loop
+	do
+	{
+		// get start timestamp. 
+		// use this to adjust the waiting period in each capture attempt to approximately attempt 60 captures in a second
+		QueryPerformanceCounter(&start);
+		// Get a frame from DDA
+		if(FAILED(hr = d.GetCapturedFrame(&pDupTex2D, wait))) // Release after preproc
+			failCount++;
+
+		if (hr == DXGI_ERROR_WAIT_TIMEOUT)
+		{
+			// retry if there was no new update to the screen during our specific timeout interval
+			// reset our waiting time
+			RESET_WAIT_TIME(start, end, interval, freq);
+			continue;
+		}
+		else
+		{
+			if (FAILED(hr))
+			{
+				// Re-try with a new DDA object
+				printf("Capture failed with error 0x%08x. Re-create DDA and try again.\n", hr);
+				__debugbreak();
+				/*Demo.Cleanup();
+				hr = Demo.Init();*/
+				if (FAILED(hr))
+				{
+					// Could not initialize DDA, bail out/
+					printf("Failed to Init DDDemo. return error 0x%08x\n", hr);
+					return -1;
+				}
+				RESET_WAIT_TIME(start, end, interval, freq);
+				QueryPerformanceCounter(&start);
+				// Get a frame from DDA
+				//Demo.Capture(wait);
+			}
+			RESET_WAIT_TIME(start, end, interval, freq);
+
+			// Preprocess for encoding
+			// [Insert preprocessing code here]
+
+			if (FAILED(hr))
+			{
+				printf("Pre-processing failed with error 0x%08x\n", hr);
+				return -1;
+			}
+
+			// Encode
+			// [Insert encoding code here]
+
+			if (FAILED(hr))
+			{
+				printf("Encode failed with error 0x%08x\n", hr);
+				return -1;
+			}
+			capturedFrames++;
+		}
+	} while (capturedFrames <= nFrames);
+
 	// Shutdown
 	if (FAILED(hr = MFShutdown()))
 		return hr;
 
 	return 0;
 }
-
-//	// ------------------------------------------------------------------------
-//	// Create sample allocator
-//	// ------------------------------------------------------------------------
-//
-//	{
-//		MFCreateVideoSampleAllocatorEx(IID_PPV_ARGS(&allocator));
-//		CHECK(allocator);
-//
-//		CComPtr<IMFAttributes> allocAttrs;
-//		MFCreateAttributes(&allocAttrs, 2);
-//
-//		if (FAILED(hr = allocAttrs->SetUINT32(MF_SA_D3D11_BINDFLAGS, D3D11_BIND_RENDER_TARGET));
-//		if (FAILED(hr = allocAttrs->SetUINT32(MF_SA_D3D11_USAGE, D3D11_USAGE_DEFAULT));
-//
-//		if (FAILED(hr = allocator->SetDirectXManager(deviceManager));
-//		if (FAILED(hr = allocator->InitializeSampleAllocatorEx(1, 2, allocAttrs, inputType));
-//	}
-//
-//
-//	// ------------------------------------------------------------------------
-//	// Start encoding
-//	// ------------------------------------------------------------------------
-//
-//	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL));
-//	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, NULL));
-//	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, NULL));
-//
-//	// Encode loop
-//	for (int i = 0; i < ENCODE_FRAMES; i++)
-//	{
-//		// Get next event
-//		CComPtr<IMFMediaEvent> event;
-//		if (FAILED(hr = eventGen->GetEvent(0, &event));
-//
-//		MediaEventType eventType;
-//		if (FAILED(hr = event->GetType(&eventType));
-//
-//		switch (eventType)
-//		{
-//		case METransformNeedInput:
-//		{
-//			CComPtr<IMFSample> sample;
-//			if (FAILED(hr = allocator->AllocateSample(&sample));
-//			if (FAILED(hr = transform->ProcessInput(inputStreamID, sample, 0));
-//
-//			// Dereferencing the device once after feeding each frame "fixes" the leak.
-//			//device.p->Release();
-//
-//			break;
-//		}
-//
-//		case METransformHaveOutput:
-//		{
-//			DWORD status;
-//			MFT_OUTPUT_DATA_BUFFER outputBuffer = {};
-//			outputBuffer.dwStreamID = outputStreamID;
-//
-//			if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status));
-//
-//			DWORD bufCount;
-//			DWORD bufLength;
-//			if (FAILED(hr = outputBuffer.pSample->GetBufferCount(&bufCount));
-//
-//			CComPtr<IMFMediaBuffer> outBuffer;
-//			if (FAILED(hr = outputBuffer.pSample->GetBufferByIndex(0, &outBuffer));
-//			if (FAILED(hr = outBuffer->GetCurrentLength(&bufLength));
-//
-//			printf("METransformHaveOutput buffers=%d, bytes=%d\n", bufCount, bufLength);
-//
-//			// Release the sample as it is not processed further.
-//			if (outputBuffer.pSample)
-//				outputBuffer.pSample->Release();
-//			if (outputBuffer.pEvents)
-//				outputBuffer.pEvents->Release();
-//			break;
-//		}
-//		}
-//	}
-//
-//	// ------------------------------------------------------------------------
-//	// Finish encoding
-//	// ------------------------------------------------------------------------
-//
-//	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, NULL));
-//	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, NULL));
-//	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_COMMAND_DRAIN, NULL));
-//
-//	// Shutdown
-//	printf("Finished encoding\n");
-//
-//	// I've tried all kinds of things...
-//	//if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(nullptr)));
-//
-//	//transform->SetInputType(inputStreamID, NULL, 0);
-//	//transform->SetOutputType(outputStreamID, NULL, 0);
-//
-//	//transform->DeleteInputStream(inputStreamID);
-//
-//	//deviceManager->ResetDevice(NULL, resetToken);
-//
-//	if (FAILED(hr = MFShutdownObject(transform));
-//}

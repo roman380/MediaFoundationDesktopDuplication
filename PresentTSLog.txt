@@ -1,0 +1,23 @@
+frameNo: 0 | Accumulated: 0MouseOnly?160858909602
+frameNo: 0 | Accumulated: 0MouseOnly?160858919360
+frameNo: 0 | Accumulated: 0MouseOnly?160858929272
+frameNo: 0 | Accumulated: 0MouseOnly?160858939287
+frameNo: 0 | Accumulated: 0MouseOnly?160858949359
+frameNo: 0 | Accumulated: 0MouseOnly?160858959392
+frameNo: 0 | Accumulated: 0MouseOnly?160858969338
+frameNo: 0 | Accumulated: 0MouseOnly?160858986094
+frameNo: 0 | Accumulated: 0MouseOnly?160858989413
+frameNo: 0 | Accumulated: 0MouseOnly?160858999567
+frameNo: 0 | Accumulated: 0MouseOnly?160859009524
+frameNo: 0 | Accumulated: 0MouseOnly?160859019650
+frameNo: 0 | Accumulated: 0MouseOnly?160859029469
+frameNo: 0 | Accumulated: 0MouseOnly?160859039471
+frameNo: 0 | Accumulated: 0MouseOnly?160859049528
+frameNo: 0 | Accumulated: 0MouseOnly?160859059361
+frameNo: 0 | Accumulated: 0MouseOnly?160859069477
+frameNo: 0 | Accumulated: 0MouseOnly?160859079332
+frameNo: 0 | Accumulated: 0MouseOnly?160859089422
+frameNo: 0 | Accumulated: 0MouseOnly?160859099306
+frameNo: 0 | Accumulated: 0MouseOnly?160859109296
+frameNo: 0 | Accumulated: 0MouseOnly?160859119534
+frameNo: 0 | Accumulated: 2 | PTS: 160859249860 | PTSInterval: 16085924986000
