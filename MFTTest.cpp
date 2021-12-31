@@ -245,12 +245,12 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	if (FAILED(hr = inTransform->GetOutputStreamInfo(0, &mftStreamInfo)))
 		return hr;
 
-	// Create a buffer for the output sample
-	if (FAILED(hr = MFCreateMemoryBuffer(mftStreamInfo.cbSize, &pBufferOut)))
-		return hr;
-
 	// Create the output sample
 	if (FAILED(hr = MFCreateSample(&pSampleOut)))
+		return hr;
+
+	// Create a buffer for the output sample
+	if (FAILED(hr = MFCreateMemoryBuffer(mftStreamInfo.cbSize, &pBufferOut)))
 		return hr;
 
 	// Add the output buffer 
@@ -335,8 +335,12 @@ int main()
 
 	// Init color conversion-related variables
 	IMFTransform* m_pXVP;
-	hr = CoCreateInstance(CLSID_VideoProcessorMFT, nullptr, CLSCTX_INPROC_SERVER, IID_IMFTransform,
-		(void**)&m_pXVP);
+	if (FAILED(hr = CoCreateInstance(CLSID_VideoProcessorMFT, nullptr, CLSCTX_INPROC_SERVER,
+		IID_IMFTransform, (void**)&m_pXVP)))
+		return hr;
+
+	if (FAILED(hr = m_pXVP->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager.p))))
+		return hr;
 
 	if (FAILED(hr = ConfigureColorConversion(m_pXVP)))
 		return hr;
