@@ -45,16 +45,16 @@ HRESULT InitMF()
 	return hr;
 }
 
-HRESULT InitDXGI(OUT CComPtr<ID3D11Device>& device, IN CComPtr<ID3D11DeviceContext>& context)
+HRESULT InitDXGI(CComPtr<ID3D11Device>& outDevice, CComPtr<ID3D11DeviceContext>& inContext)
 {
 	HRESULT hr = S_OK;
 
 	if (FAILED(hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_VIDEO_SUPPORT |
-		D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, D3D11_SDK_VERSION, &device, nullptr, &context)))
+		D3D11_CREATE_DEVICE_DEBUG, nullptr, 0, D3D11_SDK_VERSION, &outDevice, nullptr, &inContext)))
 		return hr;
 
 	// Probably not necessary in this application, but maybe the MFT requires it?
-	CComQIPtr<ID3D10Multithread> mt(device);
+	CComQIPtr<ID3D10Multithread> mt(outDevice);
 	mt->SetMultithreadProtected(TRUE);
 
 	std::cout << "- Initialized DXGI" << std::endl;
@@ -62,7 +62,7 @@ HRESULT InitDXGI(OUT CComPtr<ID3D11Device>& device, IN CComPtr<ID3D11DeviceConte
 	return hr;
 }
 
-HRESULT GetEncoder(IN const CComPtr<ID3D11Device>& device, OUT CComPtr<IMFTransform>& transform, OUT CComPtr<IMFActivate>& activate)
+HRESULT GetEncoder(const CComPtr<ID3D11Device>& inDevice, CComPtr<IMFTransform>& outTransform, CComPtr<IMFActivate>& outActivate)
 {
 	HRESULT hr = S_OK;
 	// Find the encoder
@@ -74,7 +74,7 @@ HRESULT GetEncoder(IN const CComPtr<ID3D11Device>& device, OUT CComPtr<IMFTransf
 	MFT_REGISTER_TYPE_INFO outInfo = { MFMediaType_Video, MFVideoFormat_H264 };
 
 	// Query for the adapter LUID to get a matching encoder for the device.
-	CComQIPtr<IDXGIDevice> dxgiDevice(device);
+	CComQIPtr<IDXGIDevice> dxgiDevice(inDevice);
 
 	CComPtr<IDXGIAdapter> adapter;
 	if (FAILED(hr = dxgiDevice->GetAdapter(&adapter)))
@@ -96,18 +96,18 @@ HRESULT GetEncoder(IN const CComPtr<ID3D11Device>& device, OUT CComPtr<IMFTransf
 		return hr;
 
 	// Choose the first returned encoder
-	activate = activateRaw[0];
+	outActivate = activateRaw[0];
 
 	// Memory management
 	for (UINT32 i = 0; i < activateCount; i++)
 		activateRaw[i]->Release();
 
 	// Activate
-	if (FAILED(hr = activate->ActivateObject(IID_PPV_ARGS(&transform))))
+	if (FAILED(hr = outActivate->ActivateObject(IID_PPV_ARGS(&outTransform))))
 		return hr;
 
 	// Get attributes
-	if (FAILED(hr = transform->GetAttributes(&transformAttrs)))
+	if (FAILED(hr = outTransform->GetAttributes(&transformAttrs)))
 		return hr;
 
 	std::cout << "- GetEncoder() Found " << activateCount << " encoders" << std::endl;
@@ -115,13 +115,13 @@ HRESULT GetEncoder(IN const CComPtr<ID3D11Device>& device, OUT CComPtr<IMFTransf
 	return hr;
 }
 
-HRESULT ConfigureEncoder(IN CComPtr<IMFTransform>& transform, CComPtr<IMFDXGIDeviceManager>& deviceManager, DWORD inputStreamID,
+HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDeviceManager>& inDeviceManager, DWORD inInputStreamID,
 	DWORD outputStreamID
 )
 {
 	HRESULT hr = S_OK;
 	// Sets or clears the Direct3D Device Manager for DirectX Video Accereration (DXVA).
-	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager.p))))
+	if (FAILED(hr = inTransform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(inDeviceManager.p))))
 		return hr;
 
 	// Set output type
@@ -144,12 +144,12 @@ HRESULT ConfigureEncoder(IN CComPtr<IMFTransform>& transform, CComPtr<IMFDXGIDev
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, true)))
 		return hr;
 
-	if (FAILED(hr = transform->SetOutputType(outputStreamID, outputType, 0)))
+	if (FAILED(hr = inTransform->SetOutputType(outputStreamID, outputType, 0)))
 		return hr;
 
 	// Set input type
 	CComPtr<IMFMediaType> inputType;
-	if (FAILED(hr = transform->GetInputAvailableType(inputStreamID, 0, &inputType)))
+	if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
 		return hr;
 
 	if (FAILED(hr = inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
@@ -161,10 +161,57 @@ HRESULT ConfigureEncoder(IN CComPtr<IMFTransform>& transform, CComPtr<IMFDXGIDev
 	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
 		return hr;
 
-	if (FAILED(hr = transform->SetInputType(inputStreamID, inputType, 0)))
+	if (FAILED(hr = inTransform->SetInputType(inInputStreamID, inputType, 0)))
 		return hr;
 
 	std::cout << "- Set encoder configuration" << std::endl;
+}
+
+HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
+{
+	HRESULT hr = S_OK;
+
+	CComPtr<IMFMediaType> inputType;
+	if (FAILED(hr = MFCreateMediaType(&inputType)))
+		return hr;
+	if (FAILED(hr = inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
+		return hr;
+	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_ARGB32)))
+		return hr;
+
+	CComPtr<IMFMediaType> outputType;
+	if (FAILED(hr = MFCreateMediaType(&outputType)))
+		return hr;
+	if (FAILED(hr = outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
+		return hr;
+	if (FAILED(hr = outputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
+		return hr;
+
+	if (FAILED(hr = m_pXVP->SetInputType(0, inputType, 0)))
+		return hr;
+	if (FAILED(hr = m_pXVP->SetOutputType(0, outputType, 0)))
+		return hr;
+}
+
+HRESULT ColorConversion(IMFTransform* transform, ID3D11Texture2D* surface)
+{
+	HRESULT hr = S_OK;
+
+	// Create buffer
+	CComPtr<IMFMediaBuffer> inputBuffer;
+	if (FAILED(hr = MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), surface, 0, false, &inputBuffer)))
+		return hr;
+
+	// Create sample
+	CComPtr<IMFSample> sample;
+	if(FAILED(hr = MFCreateSample(&sample)))
+		return hr;
+	if (FAILED(hr = sample->AddBuffer(inputBuffer)))
+		return hr;
+
+	// ProcessInput
+	if (FAILED(hr = transform->ProcessInput(0, sample, 0)))
+		return hr;
 }
 
 int main()
@@ -226,6 +273,14 @@ int main()
 	// Create DDAImpl Class
 	DDAImpl d(device, context);
 	if (FAILED(hr = d.Init()))
+		return hr;
+
+	// Init color conversion-related variables
+	IMFTransform* m_pXVP;
+	hr = CoCreateInstance(CLSID_VideoProcessorMFT, nullptr, CLSCTX_INPROC_SERVER, IID_IMFTransform,
+		(void**)&m_pXVP);
+
+	if (FAILED(hr = ConfigureColorConversion(m_pXVP)))
 		return hr;
 
 	// Capture loop
@@ -291,23 +346,14 @@ int main()
 			}
 			RESET_WAIT_TIME(start, end, interval, freq);
 
-			// Preprocess for encoding
+			// Color conversion for encoding
 			// [Insert preprocessing code here]
-
-			if (FAILED(hr))
-			{
-				printf("Pre-processing failed with error 0x%08x\n", hr);
-				return -1;
-			}
+			if (FAILED(hr = ColorConversion(m_pXVP, pDupTex2D)))
+				return hr;
 
 			// Encode
 			// [Insert encoding code here]
 
-			if (FAILED(hr))
-			{
-				printf("Encode failed with error 0x%08x\n", hr);
-				return -1;
-			}
 			capturedFrames++;
 		}
 	} while (capturedFrames <= nFrames);
