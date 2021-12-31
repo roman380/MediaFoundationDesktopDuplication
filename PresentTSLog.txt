@@ -1,1 +1,5 @@
-frameNo: 0 | Accumulated: 43 | PTS: 13818625332 | PTSInterval: 1381862533000
+frameNo: 0 | Accumulated: 0MouseOnly?81487007878
+frameNo: 0 | Accumulated: 0MouseOnly?81487017667
+frameNo: 0 | Accumulated: 0MouseOnly?81487027595
+frameNo: 0 | Accumulated: 0MouseOnly?81487040531
+frameNo: 0 | Accumulated: 1 | PTS: 81487056507 | PTSInterval: 8148705650000

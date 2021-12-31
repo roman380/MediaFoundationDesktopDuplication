@@ -98,9 +98,9 @@ HRESULT GetEncoder(const CComPtr<ID3D11Device>& inDevice, CComPtr<IMFTransform>&
 	// Choose the first returned encoder
 	outActivate = activateRaw[0];
 
-	// Memory management
-	for (UINT32 i = 0; i < activateCount; i++)
-		activateRaw[i]->Release();
+	// Memory management - this is wrong
+	/*for (UINT32 i = 0; i < activateCount; i++)
+		activateRaw[i]->Release();*/
 
 	// Activate
 	if (FAILED(hr = outActivate->ActivateObject(IID_PPV_ARGS(&outTransform))))
@@ -204,36 +204,72 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 	return hr;
 }
 
-HRESULT ColorConversion(IMFTransform* transform, ID3D11Texture2D* surface)
+HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFSample* pSampleOut)
 {
 	HRESULT hr = S_OK;
 
 	// Create buffer
 	CComPtr<IMFMediaBuffer> inputBuffer;
-	if (FAILED(hr = MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), surface, 0, false, &inputBuffer)))
+	if (FAILED(hr = MFCreateDXGISurfaceBuffer(__uuidof(ID3D11Texture2D), inTexture, 0, false, &inputBuffer)))
 		return hr;
 
 	// Create sample
-	CComPtr<IMFSample> sample;
-	if(FAILED(hr = MFCreateSample(&sample)))
+	CComPtr<IMFSample> inputSample;
+	if(FAILED(hr = MFCreateSample(&inputSample)))
 		return hr;
-	if (FAILED(hr = sample->AddBuffer(inputBuffer)))
+	if (FAILED(hr = inputSample->AddBuffer(inputBuffer)))
+		return hr;
+
+	// Set input sample times
+	if (FAILED(hr = inputSample->SetSampleTime(0)))
+		return hr;
+	if (FAILED(hr = inputSample->SetSampleDuration(1)))
 		return hr;
 
 	// ProcessInput
-	if (FAILED(hr = transform->ProcessInput(0, sample, 0)))
+	if (FAILED(hr = inTransform->ProcessInput(0, inputSample, 0)))
 		return hr;
 
 	// ProcessOutput
+	IMFMediaBuffer* pBufferOut = nullptr;
 	DWORD status;
 	MFT_OUTPUT_DATA_BUFFER outputBuffer;
-	outputBuffer.dwStreamID = 0;
 	outputBuffer.pSample = nullptr;
-	outputBuffer.dwStatus = 0;
 	outputBuffer.pEvents = nullptr;
+	outputBuffer.dwStreamID = 0;
+	outputBuffer.dwStatus = 0;
 
-	if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status)))
+	MFT_OUTPUT_STREAM_INFO mftStreamInfo;
+	ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
+
+	if (FAILED(hr = inTransform->GetOutputStreamInfo(0, &mftStreamInfo)))
 		return hr;
+
+	// Create a buffer for the output sample
+	if (FAILED(hr = MFCreateMemoryBuffer(mftStreamInfo.cbSize, &pBufferOut)))
+		return hr;
+
+	// Create the output sample
+	if (FAILED(hr = MFCreateSample(&pSampleOut)))
+		return hr;
+
+	// Add the output buffer 
+	if (FAILED(pSampleOut->AddBuffer(pBufferOut)))
+		return hr;
+
+	// Set output sample times
+	if (FAILED(hr = pSampleOut->SetSampleTime(0)))
+		return hr;
+	if (FAILED(hr = pSampleOut->SetSampleDuration(1)))
+		return hr;
+
+	// Set the output sample
+	outputBuffer.pSample = pSampleOut;
+
+	if (FAILED(hr = inTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
+		return hr;
+
+	return hr;
 }
 
 int main()
@@ -370,7 +406,8 @@ int main()
 
 			// Color conversion for encoding
 			// [Insert preprocessing code here]
-			if (FAILED(hr = ColorConversion(m_pXVP, pDupTex2D)))
+			IMFSample* pSampleOut = nullptr;
+			if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, pSampleOut)))
 				return hr;
 
 			// Encode
