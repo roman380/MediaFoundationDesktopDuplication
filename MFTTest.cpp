@@ -178,6 +178,13 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 		return hr;
 	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_ARGB32)))
 		return hr;
+	if (FAILED(hr = inputType->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, 1)))
+		return hr;
+	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, 3840, 2160)))
+		return hr;
+
+	if (FAILED(hr = m_pXVP->SetInputType(0, inputType, 0)))
+		return hr;
 
 	CComPtr<IMFMediaType> outputType;
 	if (FAILED(hr = MFCreateMediaType(&outputType)))
@@ -186,11 +193,15 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 		return hr;
 	if (FAILED(hr = outputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
 		return hr;
-
-	if (FAILED(hr = m_pXVP->SetInputType(0, inputType, 0)))
+	if (FAILED(hr = outputType->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, 1)))
 		return hr;
+	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, 3840, 2160)))
+		return hr;
+
 	if (FAILED(hr = m_pXVP->SetOutputType(0, outputType, 0)))
 		return hr;
+
+	return hr;
 }
 
 HRESULT ColorConversion(IMFTransform* transform, ID3D11Texture2D* surface)
@@ -211,6 +222,17 @@ HRESULT ColorConversion(IMFTransform* transform, ID3D11Texture2D* surface)
 
 	// ProcessInput
 	if (FAILED(hr = transform->ProcessInput(0, sample, 0)))
+		return hr;
+
+	// ProcessOutput
+	DWORD status;
+	MFT_OUTPUT_DATA_BUFFER outputBuffer;
+	outputBuffer.dwStreamID = 0;
+	outputBuffer.pSample = nullptr;
+	outputBuffer.dwStatus = 0;
+	outputBuffer.pEvents = nullptr;
+
+	if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status)))
 		return hr;
 }
 
