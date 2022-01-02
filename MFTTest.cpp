@@ -182,6 +182,8 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 		return hr;
 	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, 3840, 2160)))
 		return hr;
+	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 1, 1)))
+		return hr;
 
 	if (FAILED(hr = m_pXVP->SetInputType(0, inputType, 0)))
 		return hr;
@@ -197,6 +199,8 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 		return hr;
 	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, 3840, 2160)))
 		return hr;
+	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 1, 1)))
+		return hr;
 
 	if (FAILED(hr = m_pXVP->SetOutputType(0, outputType, 0)))
 		return hr;
@@ -207,6 +211,18 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFSample* pSampleOut)
 {
 	HRESULT hr = S_OK;
+
+	CD3D11_TEXTURE2D_DESC Desc;
+	inTexture->GetDesc(&Desc);
+	CComPtr<ID3D11Device> Device;
+	inTexture->GetDevice(&Device);
+	CD3D11_TEXTURE2D_DESC CopyDesc(Desc.Format, Desc.Width, Desc.Height, 1, 1, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
+	CComPtr<ID3D11Texture2D> CopyTexture;
+	Device->CreateTexture2D(&CopyDesc, nullptr, &CopyTexture);
+	CComPtr<ID3D11DeviceContext> DeviceContext;
+	Device->GetImmediateContext(&DeviceContext);
+	DeviceContext->CopyResource(CopyTexture, inTexture);
+	inTexture = CopyTexture;
 
 	// Create buffer
 	CComPtr<IMFMediaBuffer> inputBuffer;
@@ -264,7 +280,7 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 		return hr;
 
 	// Set the output sample
-	outputBuffer.pSample = pSampleOut;
+	ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES); //outputBuffer.pSample = pSampleOut;
 
 	if (FAILED(hr = inTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
 		return hr;
