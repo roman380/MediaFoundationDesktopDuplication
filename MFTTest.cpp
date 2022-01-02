@@ -102,7 +102,7 @@ HRESULT GetEncoder(const CComPtr<ID3D11Device>& inDevice, CComPtr<IMFTransform>&
 	/*for (UINT32 i = 0; i < activateCount; i++)
 		activateRaw[i]->Release();*/
 
-	// Activate
+		// Activate
 	if (FAILED(hr = outActivate->ActivateObject(IID_PPV_ARGS(&outTransform))))
 		return hr;
 
@@ -231,7 +231,7 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 
 	// Create sample
 	CComPtr<IMFSample> inputSample;
-	if(FAILED(hr = MFCreateSample(&inputSample)))
+	if (FAILED(hr = MFCreateSample(&inputSample)))
 		return hr;
 	if (FAILED(hr = inputSample->AddBuffer(inputBuffer)))
 		return hr;
@@ -284,6 +284,24 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 
 	if (FAILED(hr = inTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
 		return hr;
+
+	// Test output to file
+	/*IMFMediaBuffer* buffer;
+	if (FAILED(hr = outputBuffer.pSample->ConvertToContiguousBuffer(&buffer)))
+		return hr;
+
+	unsigned char* data;
+	DWORD length;
+	if (FAILED(hr = buffer->GetCurrentLength(&length)))
+		return hr;
+
+	if (FAILED(hr = buffer->Lock(&data, nullptr, &length)))
+		return hr;
+
+	std::ofstream fout;
+	fout.open("raw_pixels", std::ios::binary | std::ios::out);
+	fout.write((char*)data, length);
+	fout.close();*/
 
 	return hr;
 }
@@ -392,7 +410,7 @@ int main()
 		// use this to adjust the waiting period in each capture attempt to approximately attempt 60 captures in a second
 		QueryPerformanceCounter(&start);
 		// Get a frame from DDA
-		if(FAILED(hr = d.GetCapturedFrame(&pDupTex2D, wait))) // Release after preproc
+		if (FAILED(hr = d.GetCapturedFrame(&pDupTex2D, wait))) // Release after preproc
 			failCount++;
 
 		if (hr == DXGI_ERROR_WAIT_TIMEOUT)
