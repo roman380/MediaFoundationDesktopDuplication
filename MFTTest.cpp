@@ -102,7 +102,7 @@ HRESULT GetEncoder(const CComPtr<ID3D11Device>& inDevice, CComPtr<IMFTransform>&
 	/*for (UINT32 i = 0; i < activateCount; i++)
 		activateRaw[i]->Release();*/
 
-		// Activate
+	// Activate
 	if (FAILED(hr = outActivate->ActivateObject(IID_PPV_ARGS(&outTransform))))
 		return hr;
 
@@ -121,30 +121,16 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 {
 	HRESULT hr = S_OK;
 
-	// Set input type
-	CComPtr<IMFMediaType> inputType;
-	if (FAILED(hr = MFCreateMediaType(&inputType)))
-		return hr;
-	if (FAILED(hr = inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
-		return hr;
-	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
-		return hr;
-	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
-		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
+	// Sets or clears the Direct3D Device Manager for DirectX Video Accereration (DXVA).
+	if (FAILED(hr = inTransform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(inDeviceManager.p))))
 		return hr;
 
-	if (FAILED(hr = inTransform->SetInputType(inInputStreamID, inputType, 0)))
-		return hr;
-
-	/*if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
-		return hr;*/
-
-	// Set output type
+	// Create output type
 	CComPtr<IMFMediaType> outputType;
 	if (FAILED(hr = MFCreateMediaType(&outputType)))
 		return hr;
 
+	// Set output type
 	if (FAILED(hr = outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
 		return hr;
 	if (FAILED(hr = outputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264)))
@@ -160,8 +146,34 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, true)))
 		return hr;
 
+	// Set output type
 	if (FAILED(hr = inTransform->SetOutputType(outputStreamID, outputType, 0)))
 		return hr;
+
+	// Input type, I have no idea how to do this
+	CComPtr<IMFMediaType> inputType;
+	/*if (FAILED(hr = MFCreateMediaType(&inputType)))
+		return hr;*/
+
+	if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
+		return hr;
+
+	// Input type settings
+	if (FAILED(hr = inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
+		return hr;
+	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
+		return hr;
+	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
+		return hr;
+	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
+		return hr;
+
+	// Set input type
+	if (FAILED(hr = inTransform->SetInputType(inInputStreamID, inputType, 0)))
+		return hr;
+
+	/*if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
+		return hr;*/
 
 	std::cout << "- Set encoder configuration" << std::endl;
 
@@ -201,8 +213,6 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, 1)))
 		return hr;
 	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, 3840, 2160)))
-		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 1, 1)))
 		return hr;
 
 	if (FAILED(hr = m_pXVP->SetOutputType(0, outputType, 0)))
@@ -374,10 +384,6 @@ int main()
 	}
 
 	if (FAILED(hr))
-		return hr;
-
-	// Sets or clears the Direct3D Device Manager for DirectX Video Accereration (DXVA).
-	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager.p))))
 		return hr;
 
 	if (FAILED(hr = ConfigureEncoder(transform, deviceManager, inputStreamID, outputStreamID)))
