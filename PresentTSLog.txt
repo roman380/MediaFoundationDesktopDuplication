@@ -1,12 +1,22 @@
-frameNo: 0 | Accumulated: 0MouseOnly?627026813444
-frameNo: 0 | Accumulated: 1 | PTS: 627027014011 | PTSInterval: 62702701401000
-frameNo: 1 | Accumulated: 2 | PTS: 627027328533 | PTSInterval: 31452000
-frameNo: 3 | Accumulated: 2 | PTS: 627027656937 | PTSInterval: 32840000
-frameNo: 5 | Accumulated: 2 | PTS: 627027985764 | PTSInterval: 32883000
-frameNo: 7 | Accumulated: 2 | PTS: 627028320526 | PTSInterval: 33476000
-frameNo: 9 | Accumulated: 2 | PTS: 627028662920 | PTSInterval: 34240000
-frameNo: 11 | Accumulated: 2 | PTS: 627028990263 | PTSInterval: 32734000
-frameNo: 13 | Accumulated: 2 | PTS: 627029319863 | PTSInterval: 32960000
-frameNo: 15 | Accumulated: 2 | PTS: 627029679140 | PTSInterval: 35928000
-frameNo: 17 | Accumulated: 2 | PTS: 627029994302 | PTSInterval: 31516000
-frameNo: 19 | Accumulated: 2 | PTS: 627030321569 | PTSInterval: 32726000
+frameNo: 0 | Accumulated: 0MouseOnly?630782111444
+frameNo: 0 | Accumulated: 0MouseOnly?630782204003
+frameNo: 0 | Accumulated: 2 | PTS: 630782348404 | PTSInterval: 63078234840000
+frameNo: 2 | Accumulated: 2 | PTS: 630782683151 | PTSInterval: 33475000
+frameNo: 4 | Accumulated: 2 | PTS: 630783006972 | PTSInterval: 32382000
+frameNo: 6 | Accumulated: 2 | PTS: 630783343047 | PTSInterval: 33607000
+frameNo: 8 | Accumulated: 2 | PTS: 630783686720 | PTSInterval: 34368000
+frameNo: 10 | Accumulated: 2 | PTS: 630784009947 | PTSInterval: 32322000
+frameNo: 12 | Accumulated: 2 | PTS: 630784360460 | PTSInterval: 35052000
+frameNo: 14 | Accumulated: 0MouseOnly?630784573137
+frameNo: 14 | Accumulated: 0MouseOnly?630784581819
+frameNo: 14 | Accumulated: 0MouseOnly?630784600770
+frameNo: 14 | Accumulated: 0MouseOnly?630784610567
+frameNo: 14 | Accumulated: 0MouseOnly?630784620506
+frameNo: 14 | Accumulated: 0MouseOnly?630784630371
+frameNo: 14 | Accumulated: 0MouseOnly?630784640824
+frameNo: 14 | Accumulated: 0MouseOnly?630784650336
+frameNo: 14 | Accumulated: 0MouseOnly?630784661772
+frameNo: 14 | Accumulated: 2 | PTS: 630784864114 | PTSInterval: 50365000
+frameNo: 16 | Accumulated: 1 | PTS: 630785046318 | PTSInterval: 18220000
+frameNo: 17 | Accumulated: 1 | PTS: 630785350236 | PTSInterval: 30392000
+frameNo: 18 | Accumulated: 1 | PTS: 630785678053 | PTSInterval: 32782000

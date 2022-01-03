@@ -139,7 +139,7 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 		return hr;
 	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(outputType, MF_MT_FRAME_RATE, 60, 1)))
+	if (FAILED(hr = MFSetAttributeRatio(outputType, MF_MT_FRAME_RATE, 1, 1)))
 		return hr;
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_INTERLACE_MODE, 2)))
 		return hr;
@@ -165,7 +165,7 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 		return hr;
 	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
+	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 1, 1)))
 		return hr;
 
 	// Set input type
@@ -247,9 +247,9 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 		return hr;
 
 	// Set input sample times
-	if (FAILED(hr = inputSample->SetSampleTime(0)))
+	if (FAILED(hr = inputSample->SetSampleTime(100)))
 		return hr;
-	if (FAILED(hr = inputSample->SetSampleDuration(1)))
+	if (FAILED(hr = inputSample->SetSampleDuration(1000)))
 		return hr;
 
 	// Process input
@@ -301,15 +301,15 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	return hr;
 }
 
-HRESULT Encode(IMFTransform* inTransform, IMFSample* inpSample)
-{
-	HRESULT hr = S_OK;
-
-	// Process output
-
-
-	return hr;
-}
+//HRESULT Encode(IMFTransform* inTransform, IMFSample* inpSample)
+//{
+//	HRESULT hr = S_OK;
+//
+//	// Process output
+//
+//
+//	return hr;
+//}
 
 int main()
 {
@@ -462,7 +462,7 @@ int main()
 		if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &nv12sample)))
 			return hr;
 
-		// Encode
+		// Encode the NV12 frame to H264
 		CComPtr<IMFMediaEvent> event;
 		if (FAILED(hr = eventGen->GetEvent(0, &event)))
 			return hr;
@@ -521,6 +521,7 @@ int main()
 
 				if (FAILED(hr = buffer->Unlock()))
 					return hr;
+				// End test output to file
 
 				if (outputBuffer.pSample)
 					outputBuffer.pSample->Release();
