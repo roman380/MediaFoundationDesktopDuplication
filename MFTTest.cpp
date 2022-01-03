@@ -298,7 +298,27 @@ HRESULT Encode(IMFTransform* inTransform, IMFSample* inpSample)
 	if (FAILED(hr = inTransform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL)))
 		return hr;
 
+	// Process input
 	if (FAILED(hr = inTransform->ProcessInput(0, inpSample, 0)))
+		return hr;
+
+	// Process output
+	DWORD status;
+	MFT_OUTPUT_DATA_BUFFER outputBuffer;
+	outputBuffer.pSample = nullptr;
+	outputBuffer.pEvents = nullptr;
+	outputBuffer.dwStreamID = 0;
+	outputBuffer.dwStatus = 0;
+
+	MFT_OUTPUT_STREAM_INFO mftStreamInfo;
+	ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
+
+	if (FAILED(hr = inTransform->GetOutputStreamInfo(0, &mftStreamInfo)))
+		return hr;
+
+	ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
+
+	if (FAILED(hr = inTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
 		return hr;
 }
 
