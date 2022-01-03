@@ -102,7 +102,7 @@ HRESULT GetEncoder(const CComPtr<ID3D11Device>& inDevice, CComPtr<IMFTransform>&
 	/*for (UINT32 i = 0; i < activateCount; i++)
 		activateRaw[i]->Release();*/
 
-	// Activate
+		// Activate
 	if (FAILED(hr = outActivate->ActivateObject(IID_PPV_ARGS(&outTransform))))
 		return hr;
 
@@ -291,7 +291,7 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 		return hr;
 
 	std::ofstream fout;
-	fout.open("raw_pixels", std::ios::binary | std::ios::out);
+	fout.open("raw.nv12", std::ios::binary | std::ios::out);
 	fout.write((char*)data, length);
 	fout.close();
 
@@ -306,7 +306,7 @@ HRESULT Encode(IMFTransform* inTransform, IMFSample* inpSample)
 	HRESULT hr = S_OK;
 
 	// Process output
-	
+
 
 	return hr;
 }
@@ -432,81 +432,106 @@ int main()
 		{
 			// retry if there was no new update to the screen during our specific timeout interval
 			// reset our waiting time
+			printf("DXGI_ERROR_WAIT_TIMEOUT\n");
 			RESET_WAIT_TIME(start, end, interval, freq);
 			continue;
 		}
-		else
+
+		if (FAILED(hr))
 		{
+			// Re-try with a new DDA object
+			printf("Capture failed with error 0x%08x. Re-create DDA and try again.\n", hr);
+			__debugbreak();
+			/*Demo.Cleanup();
+			hr = Demo.Init();*/
 			if (FAILED(hr))
 			{
-				// Re-try with a new DDA object
-				printf("Capture failed with error 0x%08x. Re-create DDA and try again.\n", hr);
-				__debugbreak();
-				/*Demo.Cleanup();
-				hr = Demo.Init();*/
-				if (FAILED(hr))
-				{
-					// Could not initialize DDA, bail out/
-					printf("Failed to Init DDDemo. return error 0x%08x\n", hr);
-					return -1;
-				}
-				RESET_WAIT_TIME(start, end, interval, freq);
-				QueryPerformanceCounter(&start);
-				// Get a frame from DDA
-				//Demo.Capture(wait);
+				// Could not initialize DDA, bail out/
+				printf("Failed to Init DDDemo. return error 0x%08x\n", hr);
+				return -1;
 			}
 			RESET_WAIT_TIME(start, end, interval, freq);
-
-			// Color conversion for encoding
-			IMFSample* nv12sample = nullptr;
-			if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &nv12sample)))
-				return hr;
-
-			// Encode
-			CComPtr<IMFMediaEvent> event;
-			if (FAILED(hr = eventGen->GetEvent(0, &event)))
-				return hr;
-
-			MediaEventType eventType;
-			if (FAILED(hr = event->GetType(&eventType)))
-				return hr;
-
-			switch (eventType)
-			{
-				case METransformNeedInput:
-				{
-					// Process input
-					if (FAILED(hr = transform->ProcessInput(0, nv12sample, 0)))
-						return hr;
-					
-					break;
-				}
-				case METransformHaveOutput:
-				{
-					DWORD status;
-					MFT_OUTPUT_DATA_BUFFER outputBuffer;
-					outputBuffer.pSample = nullptr;
-					outputBuffer.pEvents = nullptr;
-					outputBuffer.dwStreamID = 0;
-					outputBuffer.dwStatus = 0;
-
-					MFT_OUTPUT_STREAM_INFO mftStreamInfo;
-					ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
-
-					if (FAILED(hr = transform->GetOutputStreamInfo(0, &mftStreamInfo)))
-						return hr;
-
-					ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
-
-					if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status)))
-						return hr;
-
-					break;
-				}
-			}
-
-			capturedFrames++;
+			QueryPerformanceCounter(&start);
+			// Get a frame from DDA
+			//Demo.Capture(wait);
 		}
+		RESET_WAIT_TIME(start, end, interval, freq);
+
+		// Color conversion from ARGB32 to NV12 for encoding
+		IMFSample* nv12sample = nullptr;
+		if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &nv12sample)))
+			return hr;
+
+		// Encode
+		CComPtr<IMFMediaEvent> event;
+		if (FAILED(hr = eventGen->GetEvent(0, &event)))
+			return hr;
+
+		MediaEventType eventType;
+		if (FAILED(hr = event->GetType(&eventType)))
+			return hr;
+
+		switch (eventType)
+		{
+			case METransformNeedInput:
+			{
+				// Process input
+				if (FAILED(hr = transform->ProcessInput(0, nv12sample, 0)))
+					return hr;
+
+				break;
+			}
+			case METransformHaveOutput:
+			{
+				DWORD status;
+				MFT_OUTPUT_DATA_BUFFER outputBuffer;
+				outputBuffer.pSample = nullptr;
+				outputBuffer.pEvents = nullptr;
+				outputBuffer.dwStreamID = 0;
+				outputBuffer.dwStatus = 0;
+
+				MFT_OUTPUT_STREAM_INFO mftStreamInfo;
+				ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
+
+				if (FAILED(hr = transform->GetOutputStreamInfo(0, &mftStreamInfo)))
+					return hr;
+
+				ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
+
+				if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status)))
+					return hr;
+
+				// Test output to file
+				IMFMediaBuffer* buffer;
+				if (FAILED(hr = outputBuffer.pSample->ConvertToContiguousBuffer(&buffer)))
+					return hr;
+
+				unsigned char* data;
+				DWORD length;
+				if (FAILED(hr = buffer->GetCurrentLength(&length)))
+					return hr;
+
+				if (FAILED(hr = buffer->Lock(&data, nullptr, &length)))
+					return hr;
+
+				std::ofstream fout;
+				fout.open("raw.h264", std::ios::binary | std::ios::out);
+				fout.write((char*)data, length);
+				fout.close();
+
+				if (FAILED(hr = buffer->Unlock()))
+					return hr;
+
+				if (outputBuffer.pSample)
+					outputBuffer.pSample->Release();
+				if (outputBuffer.pEvents)
+					outputBuffer.pEvents->Release();
+
+				break;
+			}
+		}
+
+		capturedFrames++;
 	} while (capturedFrames <= nFrames);
 
 	// Shutdown
