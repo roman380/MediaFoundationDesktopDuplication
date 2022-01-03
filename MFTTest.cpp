@@ -172,9 +172,6 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 	if (FAILED(hr = inTransform->SetInputType(inInputStreamID, inputType, 0)))
 		return hr;
 
-	/*if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
-		return hr;*/
-
 	std::cout << "- Set encoder configuration" << std::endl;
 
 	DWORD flags;
@@ -298,6 +295,9 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	fout.write((char*)data, length);
 	fout.close();
 
+	if (FAILED(hr = buffer->Unlock()))
+		return hr;
+
 	return hr;
 }
 
@@ -305,31 +305,10 @@ HRESULT Encode(IMFTransform* inTransform, IMFSample* inpSample)
 {
 	HRESULT hr = S_OK;
 
-	if (FAILED(hr = inTransform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL)))
-		return hr;
-
-	// Process input
-	if (FAILED(hr = inTransform->ProcessInput(0, inpSample, 0)))
-		return hr;
-
 	// Process output
-	DWORD status;
-	MFT_OUTPUT_DATA_BUFFER outputBuffer;
-	outputBuffer.pSample = nullptr;
-	outputBuffer.pEvents = nullptr;
-	outputBuffer.dwStreamID = 0;
-	outputBuffer.dwStatus = 0;
+	
 
-	MFT_OUTPUT_STREAM_INFO mftStreamInfo;
-	ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
-
-	if (FAILED(hr = inTransform->GetOutputStreamInfo(0, &mftStreamInfo)))
-		return hr;
-
-	ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
-
-	if (FAILED(hr = inTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
-		return hr;
+	return hr;
 }
 
 int main()
@@ -389,6 +368,8 @@ int main()
 	if (FAILED(hr = ConfigureEncoder(transform, deviceManager, inputStreamID, outputStreamID)))
 		return hr;
 
+	eventGen = transform;
+
 	// Create DDAImpl Class
 	DDAImpl d(device, context);
 	if (FAILED(hr = d.Init()))
@@ -404,6 +385,13 @@ int main()
 		return hr;
 
 	if (FAILED(hr = ConfigureColorConversion(m_pXVP)))
+		return hr;
+
+	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL)))
+		return hr;
+	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, NULL)))
+		return hr;
+	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, NULL)))
 		return hr;
 
 	// Capture loop
@@ -470,14 +458,52 @@ int main()
 			RESET_WAIT_TIME(start, end, interval, freq);
 
 			// Color conversion for encoding
-			// [Insert preprocessing code here]
-			IMFSample* pSampleOut = nullptr;
-			if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &pSampleOut)))
+			IMFSample* nv12sample = nullptr;
+			if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &nv12sample)))
 				return hr;
 
 			// Encode
-			// [Insert encoding code here]
-			Encode(transform, pSampleOut);
+			CComPtr<IMFMediaEvent> event;
+			if (FAILED(hr = eventGen->GetEvent(0, &event)))
+				return hr;
+
+			MediaEventType eventType;
+			if (FAILED(hr = event->GetType(&eventType)))
+				return hr;
+
+			switch (eventType)
+			{
+				case METransformNeedInput:
+				{
+					// Process input
+					if (FAILED(hr = transform->ProcessInput(0, nv12sample, 0)))
+						return hr;
+					
+					break;
+				}
+				case METransformHaveOutput:
+				{
+					DWORD status;
+					MFT_OUTPUT_DATA_BUFFER outputBuffer;
+					outputBuffer.pSample = nullptr;
+					outputBuffer.pEvents = nullptr;
+					outputBuffer.dwStreamID = 0;
+					outputBuffer.dwStatus = 0;
+
+					MFT_OUTPUT_STREAM_INFO mftStreamInfo;
+					ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
+
+					if (FAILED(hr = transform->GetOutputStreamInfo(0, &mftStreamInfo)))
+						return hr;
+
+					ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
+
+					if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status)))
+						return hr;
+
+					break;
+				}
+			}
 
 			capturedFrames++;
 		}

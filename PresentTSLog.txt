@@ -1,1 +1,12 @@
-frameNo: 0 | Accumulated: 25 | PTS: 549871196149 | PTSInterval: 54987119614000
+frameNo: 0 | Accumulated: 0MouseOnly?617180281752
+frameNo: 0 | Accumulated: 1 | PTS: 617180456695 | PTSInterval: 61718045669000
+frameNo: 1 | Accumulated: 3 | PTS: 617180931411 | PTSInterval: 47472000
+frameNo: 4 | Accumulated: 2 | PTS: 617181259834 | PTSInterval: 32842000
+frameNo: 6 | Accumulated: 2 | PTS: 617181593295 | PTSInterval: 33346000
+frameNo: 8 | Accumulated: 2 | PTS: 617181928071 | PTSInterval: 33478000
+frameNo: 10 | Accumulated: 2 | PTS: 617182265406 | PTSInterval: 33733000
+frameNo: 12 | Accumulated: 2 | PTS: 617182593933 | PTSInterval: 32853000
+frameNo: 14 | Accumulated: 2 | PTS: 617182935810 | PTSInterval: 34188000
+frameNo: 16 | Accumulated: 2 | PTS: 617183278317 | PTSInterval: 34250000
+frameNo: 18 | Accumulated: 2 | PTS: 617183596427 | PTSInterval: 31811000
+frameNo: 20 | Accumulated: 2 | PTS: 617183926158 | PTSInterval: 32973000
