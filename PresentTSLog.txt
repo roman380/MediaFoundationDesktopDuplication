@@ -1,3 +1,0 @@
-frameNo: 0 | Accumulated: 0MouseOnly?884926442914
-frameNo: 0 | Accumulated: 0MouseOnly?884926519908
-frameNo: 0 | Accumulated: 1 | PTS: 884926627028 | PTSInterval: 88492662702000

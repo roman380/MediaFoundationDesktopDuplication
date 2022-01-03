@@ -120,9 +120,25 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 )
 {
 	HRESULT hr = S_OK;
-	// Sets or clears the Direct3D Device Manager for DirectX Video Accereration (DXVA).
-	if (FAILED(hr = inTransform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(inDeviceManager.p))))
+
+	// Set input type
+	CComPtr<IMFMediaType> inputType;
+	if (FAILED(hr = MFCreateMediaType(&inputType)))
 		return hr;
+	if (FAILED(hr = inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
+		return hr;
+	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
+		return hr;
+	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
+		return hr;
+	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
+		return hr;
+
+	if (FAILED(hr = inTransform->SetInputType(inInputStreamID, inputType, 0)))
+		return hr;
+
+	/*if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
+		return hr;*/
 
 	// Set output type
 	CComPtr<IMFMediaType> outputType;
@@ -147,24 +163,11 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 	if (FAILED(hr = inTransform->SetOutputType(outputStreamID, outputType, 0)))
 		return hr;
 
-	// Set input type
-	CComPtr<IMFMediaType> inputType;
-	if (FAILED(hr = inTransform->GetInputAvailableType(inInputStreamID, 0, &inputType)))
-		return hr;
-
-	if (FAILED(hr = inputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)))
-		return hr;
-	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
-		return hr;
-	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
-		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
-		return hr;
-
-	if (FAILED(hr = inTransform->SetInputType(inInputStreamID, inputType, 0)))
-		return hr;
-
 	std::cout << "- Set encoder configuration" << std::endl;
+
+	DWORD flags;
+	if (FAILED(hr = inTransform->GetInputStatus(0, &flags)))
+		return hr;
 }
 
 HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
@@ -208,7 +211,7 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 	return hr;
 }
 
-HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFSample* pSampleOut)
+HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFSample** pSampleOut)
 {
 	HRESULT hr = S_OK;
 
@@ -242,12 +245,11 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	if (FAILED(hr = inputSample->SetSampleDuration(1)))
 		return hr;
 
-	// ProcessInput
+	// Process input
 	if (FAILED(hr = inTransform->ProcessInput(0, inputSample, 0)))
 		return hr;
 
-	// ProcessOutput
-	IMFMediaBuffer* pBufferOut = nullptr;
+	// Process output
 	DWORD status;
 	MFT_OUTPUT_DATA_BUFFER outputBuffer;
 	outputBuffer.pSample = nullptr;
@@ -261,32 +263,15 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	if (FAILED(hr = inTransform->GetOutputStreamInfo(0, &mftStreamInfo)))
 		return hr;
 
-	// Create the output sample
-	if (FAILED(hr = MFCreateSample(&pSampleOut)))
-		return hr;
-
-	// Create a buffer for the output sample
-	if (FAILED(hr = MFCreateMemoryBuffer(mftStreamInfo.cbSize, &pBufferOut)))
-		return hr;
-
-	// Add the output buffer 
-	if (FAILED(pSampleOut->AddBuffer(pBufferOut)))
-		return hr;
-
-	// Set output sample times
-	if (FAILED(hr = pSampleOut->SetSampleTime(0)))
-		return hr;
-	if (FAILED(hr = pSampleOut->SetSampleDuration(1)))
-		return hr;
-
-	// Set the output sample
-	ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES); //outputBuffer.pSample = pSampleOut;
+	ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
 
 	if (FAILED(hr = inTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
 		return hr;
 
+	*pSampleOut = outputBuffer.pSample;
+
 	// Test output to file
-	/*IMFMediaBuffer* buffer;
+	IMFMediaBuffer* buffer;
 	if (FAILED(hr = outputBuffer.pSample->ConvertToContiguousBuffer(&buffer)))
 		return hr;
 
@@ -301,9 +286,20 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	std::ofstream fout;
 	fout.open("raw_pixels", std::ios::binary | std::ios::out);
 	fout.write((char*)data, length);
-	fout.close();*/
+	fout.close();
 
 	return hr;
+}
+
+HRESULT Encode(IMFTransform* inTransform, IMFSample* inpSample)
+{
+	HRESULT hr = S_OK;
+
+	if (FAILED(hr = inTransform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL)))
+		return hr;
+
+	if (FAILED(hr = inTransform->ProcessInput(0, inpSample, 0)))
+		return hr;
 }
 
 int main()
@@ -356,7 +352,12 @@ int main()
 		outputStreamID = 0;
 		hr = S_OK;
 	}
+
 	if (FAILED(hr))
+		return hr;
+
+	// Sets or clears the Direct3D Device Manager for DirectX Video Accereration (DXVA).
+	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager.p))))
 		return hr;
 
 	if (FAILED(hr = ConfigureEncoder(transform, deviceManager, inputStreamID, outputStreamID)))
@@ -445,11 +446,12 @@ int main()
 			// Color conversion for encoding
 			// [Insert preprocessing code here]
 			IMFSample* pSampleOut = nullptr;
-			if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, pSampleOut)))
+			if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &pSampleOut)))
 				return hr;
 
 			// Encode
 			// [Insert encoding code here]
+			Encode(transform, pSampleOut);
 
 			capturedFrames++;
 		}
