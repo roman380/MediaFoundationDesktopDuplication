@@ -27,10 +27,10 @@
 constexpr UINT ENCODE_WIDTH = 1920;
 constexpr UINT ENCODE_HEIGHT = 1080;
 
-CComPtr<IMFVideoSampleAllocatorEx> allocator;
-
 CComPtr<IMFAttributes> transformAttrs;
 CComQIPtr<IMFMediaEventGenerator> eventGen;
+
+//CComPtr<IMFVideoSampleAllocatorEx> allocator;
 
 HRESULT InitMF()
 {
@@ -98,11 +98,11 @@ HRESULT GetEncoder(const CComPtr<ID3D11Device>& inDevice, CComPtr<IMFTransform>&
 	// Choose the first returned encoder
 	outActivate = activateRaw[0];
 
-	// Memory management - this is wrong
-	/*for (UINT32 i = 0; i < activateCount; i++)
-		activateRaw[i]->Release();*/
+	// Release the other activates
+	for (int i = 1; i < activateCount; i++)
+		activateRaw[i]->Release();
 
-		// Activate
+	// Activate
 	if (FAILED(hr = outActivate->ActivateObject(IID_PPV_ARGS(&outTransform))))
 		return hr;
 
@@ -137,7 +137,7 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 		return hr;
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_AVG_BITRATE, 30000000)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, 3840, 2160)))
+	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
 		return hr;
 	if (FAILED(hr = MFSetAttributeRatio(outputType, MF_MT_FRAME_RATE, 60, 1)))
 		return hr;
@@ -163,7 +163,7 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 		return hr;
 	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, 3840, 2160)))
+	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
 		return hr;
 	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
 		return hr;
@@ -174,9 +174,12 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 
 	std::cout << "- Set encoder configuration" << std::endl;
 
-	DWORD flags;
+	// AMD encoder crashes on this line
+	/*DWORD flags;
 	if (FAILED(hr = inTransform->GetInputStatus(0, &flags)))
-		return hr;
+		return hr;*/
+
+	return hr;
 }
 
 HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
@@ -209,7 +212,7 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 		return hr;
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT, 1)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, 3840, 2160)))
+	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
 		return hr;
 
 	if (FAILED(hr = m_pXVP->SetOutputType(0, outputType, 0)))
@@ -352,7 +355,7 @@ int main()
 	if (FAILED(hr = transformAttrs->SetUINT32(MF_TRANSFORM_ASYNC_UNLOCK, true)))
 		return hr;
 
-	// Get Stream IDs
+	// Get encoder stream IDs
 	DWORD inputStreamID, outputStreamID;
 	hr = encoderTransform->GetStreamIDs(1, &inputStreamID, 1, &outputStreamID);
 	if (hr == E_NOTIMPL) // Doesn't mean failed, see remarks
@@ -365,17 +368,13 @@ int main()
 	if (FAILED(hr))
 		return hr;
 
+	// Init encoder-related objects/variables
 	if (FAILED(hr = ConfigureEncoder(encoderTransform, deviceManager, inputStreamID, outputStreamID)))
 		return hr;
 
 	eventGen = encoderTransform;
 
-	// Create DDAImpl Class
-	DDAImpl d(device, context);
-	if (FAILED(hr = d.Init()))
-		return hr;
-
-	// Init color conversion-related variables
+	// Init color conversion-related objects/variables
 	IMFTransform* colorTransform;
 	if (FAILED(hr = CoCreateInstance(CLSID_VideoProcessorMFT, nullptr, CLSCTX_INPROC_SERVER,
 		IID_IMFTransform, (void**)&colorTransform)))
@@ -394,8 +393,13 @@ int main()
 	if (FAILED(hr = encoderTransform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, NULL)))
 		return hr;
 
+	// Create DDAImpl Class
+	DDAImpl d(device, context);
+	if (FAILED(hr = d.Init()))
+		return hr;
+
 	// Capture loop
-	const int nFrames = 60;
+	const int nFrames = 360;
 	const int WAIT_BASE = 17;
 	int capturedFrames = 0;
 	LARGE_INTEGER start = { 0 };
@@ -478,11 +482,13 @@ int main()
 				if (FAILED(hr = ColorConvert(colorTransform, pDupTex2D, &nv12sample)))
 					return hr;
 
+				pDupTex2D->Release();
+
 				// Process input
 				if (FAILED(hr = encoderTransform->ProcessInput(0, nv12sample, 0)))
 					return hr;
-				nv12sample->Release();
 
+				nv12sample->Release();
 				device.Release();
 
 				break;
