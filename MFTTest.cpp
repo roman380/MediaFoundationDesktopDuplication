@@ -137,9 +137,9 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 		return hr;
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_AVG_BITRATE, 30000000)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
+	if (FAILED(hr = MFSetAttributeSize(outputType, MF_MT_FRAME_SIZE, 3840, 2160)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(outputType, MF_MT_FRAME_RATE, 1, 1)))
+	if (FAILED(hr = MFSetAttributeRatio(outputType, MF_MT_FRAME_RATE, 60, 1)))
 		return hr;
 	if (FAILED(hr = outputType->SetUINT32(MF_MT_INTERLACE_MODE, 2)))
 		return hr;
@@ -163,9 +163,9 @@ HRESULT ConfigureEncoder(CComPtr<IMFTransform>& inTransform, CComPtr<IMFDXGIDevi
 		return hr;
 	if (FAILED(hr = inputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, ENCODE_WIDTH, ENCODE_HEIGHT)))
+	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, 3840, 2160)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 1, 1)))
+	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
 		return hr;
 
 	// Set input type
@@ -194,8 +194,8 @@ HRESULT ConfigureColorConversion(IMFTransform* m_pXVP)
 		return hr;
 	if (FAILED(hr = MFSetAttributeSize(inputType, MF_MT_FRAME_SIZE, 3840, 2160)))
 		return hr;
-	if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 1, 1)))
-		return hr;
+	/*if (FAILED(hr = MFSetAttributeRatio(inputType, MF_MT_FRAME_RATE, 60, 1)))
+		return hr;*/
 
 	if (FAILED(hr = m_pXVP->SetInputType(0, inputType, 0)))
 		return hr;
@@ -278,7 +278,7 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	*pSampleOut = outputBuffer.pSample;
 
 	// Test output to file
-	IMFMediaBuffer* buffer;
+	/*IMFMediaBuffer* buffer;
 	if (FAILED(hr = outputBuffer.pSample->ConvertToContiguousBuffer(&buffer)))
 		return hr;
 
@@ -296,7 +296,7 @@ HRESULT ColorConvert(IMFTransform* inTransform, ID3D11Texture2D* inTexture, IMFS
 	fout.close();
 
 	if (FAILED(hr = buffer->Unlock()))
-		return hr;
+		return hr;*/
 
 	return hr;
 }
@@ -336,9 +336,9 @@ int main()
 		return hr;
 
 	// Get encoder
-	CComPtr<IMFTransform> transform;
+	CComPtr<IMFTransform> encoderTransform;
 	CComPtr<IMFActivate> activate;
-	if (FAILED(hr = GetEncoder(device, transform, activate)))
+	if (FAILED(hr = GetEncoder(device, encoderTransform, activate)))
 		return hr;
 
 	// Get the name of the encoder
@@ -354,7 +354,7 @@ int main()
 
 	// Get Stream IDs
 	DWORD inputStreamID, outputStreamID;
-	hr = transform->GetStreamIDs(1, &inputStreamID, 1, &outputStreamID);
+	hr = encoderTransform->GetStreamIDs(1, &inputStreamID, 1, &outputStreamID);
 	if (hr == E_NOTIMPL) // Doesn't mean failed, see remarks
 	{				     // https://docs.microsoft.com/en-us/windows/win32/api/mftransform/nf-mftransform-imftransform-getstreamids
 		inputStreamID = 0;
@@ -365,10 +365,10 @@ int main()
 	if (FAILED(hr))
 		return hr;
 
-	if (FAILED(hr = ConfigureEncoder(transform, deviceManager, inputStreamID, outputStreamID)))
+	if (FAILED(hr = ConfigureEncoder(encoderTransform, deviceManager, inputStreamID, outputStreamID)))
 		return hr;
 
-	eventGen = transform;
+	eventGen = encoderTransform;
 
 	// Create DDAImpl Class
 	DDAImpl d(device, context);
@@ -376,22 +376,22 @@ int main()
 		return hr;
 
 	// Init color conversion-related variables
-	IMFTransform* m_pXVP;
+	IMFTransform* colorTransform;
 	if (FAILED(hr = CoCreateInstance(CLSID_VideoProcessorMFT, nullptr, CLSCTX_INPROC_SERVER,
-		IID_IMFTransform, (void**)&m_pXVP)))
+		IID_IMFTransform, (void**)&colorTransform)))
 		return hr;
 
-	if (FAILED(hr = m_pXVP->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager.p))))
+	if (FAILED(hr = colorTransform->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager.p))))
 		return hr;
 
-	if (FAILED(hr = ConfigureColorConversion(m_pXVP)))
+	if (FAILED(hr = ConfigureColorConversion(colorTransform)))
 		return hr;
 
-	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL)))
+	if (FAILED(hr = encoderTransform->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, NULL)))
 		return hr;
-	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, NULL)))
+	if (FAILED(hr = encoderTransform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, NULL)))
 		return hr;
-	if (FAILED(hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, NULL)))
+	if (FAILED(hr = encoderTransform->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, NULL)))
 		return hr;
 
 	// Capture loop
@@ -418,6 +418,8 @@ int main()
     MICROSEC_TIME(interval, freq);                          \
     wait = (int)(WAIT_BASE - (interval.QuadPart * 1000));
 
+	std::ofstream fout;
+	fout.open("raw.h264", std::ios::binary | std::ios::out);
 	// Run capture loop
 	do
 	{
@@ -457,10 +459,6 @@ int main()
 		}
 		RESET_WAIT_TIME(start, end, interval, freq);
 
-		// Color conversion from ARGB32 to NV12 for encoding
-		IMFSample* nv12sample = nullptr;
-		if (FAILED(hr = ColorConvert(m_pXVP, pDupTex2D, &nv12sample)))
-			return hr;
 
 		// Encode the NV12 frame to H264
 		CComPtr<IMFMediaEvent> event;
@@ -475,9 +473,17 @@ int main()
 		{
 			case METransformNeedInput:
 			{
-				// Process input
-				if (FAILED(hr = transform->ProcessInput(0, nv12sample, 0)))
+				// Color conversion from ARGB32 to NV12 for encoding
+				IMFSample* nv12sample = nullptr;
+				if (FAILED(hr = ColorConvert(colorTransform, pDupTex2D, &nv12sample)))
 					return hr;
+
+				// Process input
+				if (FAILED(hr = encoderTransform->ProcessInput(0, nv12sample, 0)))
+					return hr;
+				nv12sample->Release();
+
+				device.Release();
 
 				break;
 			}
@@ -493,12 +499,12 @@ int main()
 				MFT_OUTPUT_STREAM_INFO mftStreamInfo;
 				ZeroMemory(&mftStreamInfo, sizeof(MFT_OUTPUT_STREAM_INFO));
 
-				if (FAILED(hr = transform->GetOutputStreamInfo(0, &mftStreamInfo)))
+				if (FAILED(hr = encoderTransform->GetOutputStreamInfo(0, &mftStreamInfo)))
 					return hr;
 
 				ATLASSERT(mftStreamInfo.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES);
 
-				if (FAILED(hr = transform->ProcessOutput(0, 1, &outputBuffer, &status)))
+				if (FAILED(hr = encoderTransform->ProcessOutput(0, 1, &outputBuffer, &status)))
 					return hr;
 
 				// Test output to file
@@ -514,10 +520,9 @@ int main()
 				if (FAILED(hr = buffer->Lock(&data, nullptr, &length)))
 					return hr;
 
-				std::ofstream fout;
-				fout.open("raw.h264", std::ios::binary | std::ios::out);
+				
 				fout.write((char*)data, length);
-				fout.close();
+				
 
 				if (FAILED(hr = buffer->Unlock()))
 					return hr;
@@ -534,7 +539,7 @@ int main()
 
 		capturedFrames++;
 	} while (capturedFrames <= nFrames);
-
+	fout.close();
 	// Shutdown
 	if (FAILED(hr = MFShutdown()))
 		return hr;
